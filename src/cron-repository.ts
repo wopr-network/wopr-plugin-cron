@@ -19,38 +19,40 @@ export async function initCronStorage(storage: StorageApi): Promise<void> {
   runsRepo = storage.getRepository<CronRunRow>("cron", "runs");
 }
 
-function ensureInitialized(): void {
-  if (!jobsRepo || !runsRepo) {
-    throw new Error("Cron storage not initialized - call initCronStorage() first");
-  }
+function getJobsRepo(): Repository<CronJobRow> {
+  if (!jobsRepo) throw new Error("Cron storage not initialized - call initCronStorage() first");
+  return jobsRepo;
+}
+
+function getRunsRepo(): Repository<CronRunRow> {
+  if (!runsRepo) throw new Error("Cron storage not initialized - call initCronStorage() first");
+  return runsRepo;
 }
 
 /**
  * Get all cron jobs
  */
 export async function getCrons(): Promise<CronJobRow[]> {
-  ensureInitialized();
-  return await jobsRepo!.findMany();
+  return await getJobsRepo().findMany();
 }
 
 /**
  * Get a specific cron job by name
  */
 export async function getCron(name: string): Promise<CronJobRow | null> {
-  ensureInitialized();
-  return await jobsRepo!.findById(name);
+  return await getJobsRepo().findById(name);
 }
 
 /**
  * Add or update a cron job (upsert by name)
  */
 export async function addCron(job: CronJobRow): Promise<void> {
-  ensureInitialized();
-  const existing = await jobsRepo!.findById(job.name);
+  const repo = getJobsRepo();
+  const existing = await repo.findById(job.name);
   if (existing) {
-    await jobsRepo!.update(job.name, job);
+    await repo.update(job.name, job);
   } else {
-    await jobsRepo!.insert(job);
+    await repo.insert(job);
   }
 }
 
@@ -58,17 +60,15 @@ export async function addCron(job: CronJobRow): Promise<void> {
  * Remove a cron job by name
  */
 export async function removeCron(name: string): Promise<boolean> {
-  ensureInitialized();
-  return await jobsRepo!.delete(name);
+  return await getJobsRepo().delete(name);
 }
 
 /**
  * Add a cron run entry to history
  */
 export async function addCronRun(run: Omit<CronRunRow, "id">): Promise<void> {
-  ensureInitialized();
   const id = randomUUID();
-  await runsRepo!.insert({ id, ...run });
+  await getRunsRepo().insert({ id, ...run });
 }
 
 /**
@@ -83,10 +83,10 @@ export async function getCronHistory(options?: {
   successOnly?: boolean;
   failedOnly?: boolean;
 }): Promise<{ entries: CronRunRow[]; total: number; hasMore: boolean }> {
-  ensureInitialized();
+  const repo = getRunsRepo();
 
   // Build filter object
-  const filter: Record<string, unknown> = {};
+  const filter: Filter<CronRunRow> = {};
   if (options?.name) {
     filter.cronName = options.name;
   }
@@ -103,20 +103,13 @@ export async function getCronHistory(options?: {
   }
 
   // Get total count
-  const total = await runsRepo!.count(filter as Filter<CronRunRow>);
+  const total = await repo.count(filter);
 
-  // Build query with filter
-  const query = runsRepo!.query().where(filter as Filter<CronRunRow>);
-
-  // Order by most recent first
-  query.orderBy("startedAt", "desc");
-
-  // Apply pagination
+  // Build query with filter, order, and pagination (chain all calls)
   const offset = options?.offset ?? 0;
   const limit = options?.limit ?? 50;
-  query.offset(offset).limit(limit);
+  const entries = await repo.query().where(filter).orderBy("startedAt", "desc").offset(offset).limit(limit).execute();
 
-  const entries = await query.execute();
   const hasMore = offset + entries.length < total;
 
   return { entries, total, hasMore };
@@ -126,14 +119,14 @@ export async function getCronHistory(options?: {
  * Clear cron run history with optional filtering
  */
 export async function clearCronHistory(options?: { name?: string; session?: string }): Promise<number> {
-  ensureInitialized();
+  const repo = getRunsRepo();
 
   if (options?.name) {
-    return await runsRepo!.deleteMany({ cronName: options.name });
+    return await repo.deleteMany({ cronName: options.name });
   }
   if (options?.session) {
-    return await runsRepo!.deleteMany({ session: options.session });
+    return await repo.deleteMany({ session: options.session });
   }
   // Clear all
-  return await runsRepo!.deleteMany({});
+  return await repo.deleteMany({});
 }

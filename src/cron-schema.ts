@@ -2,8 +2,8 @@
  * Cron storage schema - SQL-based cron job and execution history
  */
 
-import { z } from "zod";
 import type { PluginSchema } from "@wopr-network/plugin-types";
+import { z } from "zod";
 
 // Schema for CronScript - stored as JSON in scripts column
 export const cronScriptSchema = z.object({

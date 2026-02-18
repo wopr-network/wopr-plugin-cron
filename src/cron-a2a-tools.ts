@@ -1,6 +1,6 @@
 import type { A2AServerConfig } from "@wopr-network/plugin-types";
-import { addCron, getCronHistory, getCrons, removeCron } from "./cron-repository.js";
 import { createOnceJob } from "./cron.js";
+import { addCron, getCronHistory, getCrons, removeCron } from "./cron-repository.js";
 
 export function buildCronA2ATools(): A2AServerConfig {
   return {
@@ -111,8 +111,7 @@ export function buildCronA2ATools(): A2AServerConfig {
         async handler(args) {
           const { name } = args as { name: string };
           const removed = await removeCron(name);
-          if (!removed)
-            return { content: [{ type: "text", text: `Cron job '${name}' not found` }], isError: true };
+          if (!removed) return { content: [{ type: "text", text: `Cron job '${name}' not found` }], isError: true };
           return { content: [{ type: "text", text: `Cron job '${name}' cancelled` }] };
         },
       },
