@@ -12,6 +12,10 @@ vi.mock("../src/cron-a2a-tools.js", () => ({
   buildCronA2ATools: vi.fn(() => ({ name: "cron", version: "1.0.0", tools: [] })),
 }));
 
+vi.mock("../src/cron-commands.js", () => ({
+  cronCommandHandler: vi.fn(),
+}));
+
 import plugin from "../src/index.js";
 import { initCronStorage } from "../src/cron-repository.js";
 import { createCronTickLoop } from "../src/cron-tick.js";
@@ -44,6 +48,15 @@ describe("wopr-plugin-cron", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  describe("plugin commands", () => {
+    it("registers a 'cron' command", () => {
+      expect(plugin.commands).toBeDefined();
+      expect(plugin.commands).toHaveLength(1);
+      expect(plugin.commands![0].name).toBe("cron");
+      expect(typeof plugin.commands![0].handler).toBe("function");
+    });
   });
 
   describe("plugin metadata", () => {

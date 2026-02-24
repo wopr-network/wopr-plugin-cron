@@ -1,5 +1,6 @@
 import type { WOPRPlugin, WOPRPluginContext } from "@wopr-network/plugin-types";
 import { buildCronA2ATools } from "./cron-a2a-tools.js";
+import { cronCommandHandler } from "./cron-commands.js";
 import { initCronStorage } from "./cron-repository.js";
 import { createCronTickLoop } from "./cron-tick.js";
 
@@ -9,6 +10,15 @@ const plugin: WOPRPlugin = {
   name: "wopr-plugin-cron",
   version: "1.0.0",
   description: "Cron scheduling — recurring and one-time message injection with optional script execution",
+
+  commands: [
+    {
+      name: "cron",
+      description: "Manage scheduled injections (add, remove, list, once, now)",
+      usage: "cron <add|remove|list|once|now> [args]",
+      handler: cronCommandHandler,
+    },
+  ],
 
   async init(ctx: WOPRPluginContext) {
     // 1. Register storage schema and get repositories
