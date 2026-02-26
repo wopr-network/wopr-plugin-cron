@@ -6,7 +6,6 @@ import { createCronTickLoop } from "./cron-tick.js";
 
 let ctx: WOPRPluginContext | null = null;
 let tickInterval: ReturnType<typeof setInterval> | null = null;
-const cleanups: Array<() => void> = [];
 
 const plugin: WOPRPlugin = {
   name: "wopr-plugin-cron",
@@ -57,10 +56,6 @@ const plugin: WOPRPlugin = {
       clearInterval(tickInterval);
       tickInterval = null;
     }
-    for (const cleanup of cleanups) {
-      cleanup();
-    }
-    cleanups.length = 0;
     resetCronStorage();
     ctx = null;
   },
