@@ -1,15 +1,28 @@
 import type { WOPRPlugin, WOPRPluginContext } from "@wopr-network/plugin-types";
 import { buildCronA2ATools } from "./cron-a2a-tools.js";
 import { cronCommandHandler } from "./cron-commands.js";
-import { initCronStorage } from "./cron-repository.js";
+import { initCronStorage, resetCronStorage } from "./cron-repository.js";
 import { createCronTickLoop } from "./cron-tick.js";
 
+let ctx: WOPRPluginContext | null = null;
 let tickInterval: ReturnType<typeof setInterval> | null = null;
+const cleanups: Array<() => void> = [];
 
 const plugin: WOPRPlugin = {
   name: "wopr-plugin-cron",
   version: "1.0.0",
   description: "Cron scheduling — recurring and one-time message injection with optional script execution",
+
+  manifest: {
+    name: "wopr-plugin-cron",
+    version: "1.0.0",
+    description: "Cron scheduling — recurring and one-time message injection with optional script execution",
+    capabilities: ["scheduling", "automation"],
+    category: "utility",
+    tags: ["cron", "scheduling", "automation", "timer"],
+    icon: ":clock3:",
+    lifecycle: { shutdownBehavior: "graceful" },
+  },
 
   commands: [
     {
@@ -20,7 +33,9 @@ const plugin: WOPRPlugin = {
     },
   ],
 
-  async init(ctx: WOPRPluginContext) {
+  async init(context: WOPRPluginContext) {
+    ctx = context;
+
     // 1. Register storage schema and get repositories
     await initCronStorage(ctx.storage);
 
@@ -42,6 +57,12 @@ const plugin: WOPRPlugin = {
       clearInterval(tickInterval);
       tickInterval = null;
     }
+    for (const cleanup of cleanups) {
+      cleanup();
+    }
+    cleanups.length = 0;
+    resetCronStorage();
+    ctx = null;
   },
 };
 

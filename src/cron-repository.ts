@@ -130,3 +130,11 @@ export async function clearCronHistory(options?: { name?: string; session?: stri
   // Clear all
   return await repo.deleteMany({});
 }
+
+/**
+ * Reset repository references (called during plugin shutdown)
+ */
+export function resetCronStorage(): void {
+  jobsRepo = null;
+  runsRepo = null;
+}

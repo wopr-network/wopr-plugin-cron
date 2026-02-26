@@ -76,7 +76,7 @@ export function createCronTickLoop(ctx: WOPRPluginContext): () => Promise<void> 
             toRemove.push(cron.name);
             ctx.log.info(`Auto-removed one-time job: ${cron.name}`);
           }
-        } catch (err) {
+        } catch (err: unknown) {
           const durationMs = Date.now() - startTime;
           const errorMsg = err instanceof Error ? err.message : String(err);
           ctx.log.error(`Cron error: ${cron.name} - ${errorMsg}`);
