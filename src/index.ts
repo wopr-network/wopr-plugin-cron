@@ -21,6 +21,7 @@ const plugin: WOPRPlugin = {
     tags: ["cron", "scheduling", "automation", "timer"],
     icon: ":clock3:",
     lifecycle: { shutdownBehavior: "graceful" },
+    requires: {},
   },
 
   commands: [
