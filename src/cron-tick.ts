@@ -2,8 +2,15 @@ import type { WOPRPluginContext } from "@wopr-network/plugin-types";
 import { executeCronScripts, resolveScriptTemplates, shouldRunCron } from "./cron.js";
 import { addCronRun, getCrons, removeCron } from "./cron-repository.js";
 import type { CronScriptResult } from "./cron-schema.js";
+import { PLUGIN_NAME } from "./plugin-name.js";
 
 const CRON_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max per cron job
+
+const CRON_SOURCE = {
+  type: "cron" as const,
+  trustLevel: "owner" as const,
+  identity: { pluginName: PLUGIN_NAME },
+};
 
 export function createCronTickLoop(ctx: WOPRPluginContext): () => Promise<void> {
   const lastRun: Record<string, number> = {};
@@ -36,7 +43,7 @@ export function createCronTickLoop(ctx: WOPRPluginContext): () => Promise<void> 
           let scriptResults: CronScriptResult[] | undefined;
           if (cron.scripts && cron.scripts.length > 0) {
             // Check cronScriptsEnabled from main config
-            const cfg = ctx.getMainConfig("daemon") as { cronScriptsEnabled?: boolean } | undefined;
+            const cfg = ctx.getConfig<{ cronScriptsEnabled?: boolean }>();
             if (!cfg?.cronScriptsEnabled) {
               ctx.log.info(`Cron scripts disabled for ${cron.name}`);
             } else {
@@ -51,7 +58,7 @@ export function createCronTickLoop(ctx: WOPRPluginContext): () => Promise<void> 
           }
 
           await Promise.race([
-            ctx.inject(cron.session, resolvedMessage, { from: "cron", silent: true }),
+            ctx.inject(cron.session, resolvedMessage, { from: "cron", silent: true, source: CRON_SOURCE }),
             new Promise<never>((_, reject) => {
               timeoutId = setTimeout(
                 () => reject(new Error(`Cron job '${cron.name}' timed out after ${CRON_TIMEOUT_MS / 1000}s`)),

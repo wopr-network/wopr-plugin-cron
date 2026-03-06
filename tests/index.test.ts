@@ -2,6 +2,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 vi.mock("../src/cron-repository.js", () => ({
   initCronStorage: vi.fn(),
+  resetCronStorage: vi.fn(),
 }));
 
 vi.mock("../src/cron-tick.js", () => ({
@@ -32,6 +33,13 @@ function createMockCtx() {
     registerExtension: vi.fn(),
     registerContextProvider: vi.fn(),
     registerA2AServer: vi.fn(),
+    registerPermission: vi.fn(),
+    registerInjectionSource: vi.fn(),
+    registerToolPermission: vi.fn(),
+    unregisterPermission: vi.fn(),
+    unregisterInjectionSource: vi.fn(),
+    unregisterToolPermission: vi.fn(),
+    getConfig: vi.fn().mockReturnValue({}),
     log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
     logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
   } as any;
@@ -72,6 +80,14 @@ describe("wopr-plugin-cron", () => {
       expect(plugin.description).toBeDefined();
       expect(plugin.description.length).toBeGreaterThan(0);
     });
+
+    it("has configSchema with cronScriptsEnabled field", () => {
+      expect(plugin.manifest.configSchema).toBeDefined();
+      const field = plugin.manifest.configSchema!.fields.find((f: any) => f.name === "cronScriptsEnabled");
+      expect(field).toBeDefined();
+      expect(field!.type).toBe("checkbox");
+      expect(field!.default).toBe(false);
+    });
   });
 
   describe("init()", () => {
@@ -107,6 +123,25 @@ describe("wopr-plugin-cron", () => {
       await plugin.init(mockCtx);
       expect(mockCtx.log.info).toHaveBeenCalledWith("Cron plugin initialized");
     });
+
+    it("registers cron.manage permission", async () => {
+      await plugin.init(mockCtx);
+      expect(mockCtx.registerPermission).toHaveBeenCalledWith("cron.manage");
+    });
+
+    it("registers cron injection source with owner trust", async () => {
+      await plugin.init(mockCtx);
+      expect(mockCtx.registerInjectionSource).toHaveBeenCalledWith("cron", "owner");
+    });
+
+    it("registers tool-permission mappings for all 5 cron tools", async () => {
+      await plugin.init(mockCtx);
+      expect(mockCtx.registerToolPermission).toHaveBeenCalledWith("cron_schedule", "cron.manage");
+      expect(mockCtx.registerToolPermission).toHaveBeenCalledWith("cron_once", "cron.manage");
+      expect(mockCtx.registerToolPermission).toHaveBeenCalledWith("cron_list", "cron.manage");
+      expect(mockCtx.registerToolPermission).toHaveBeenCalledWith("cron_cancel", "cron.manage");
+      expect(mockCtx.registerToolPermission).toHaveBeenCalledWith("cron_history", "cron.manage");
+    });
   });
 
   describe("shutdown()", () => {
@@ -129,6 +164,18 @@ describe("wopr-plugin-cron", () => {
 
     it("does not throw when called without init", async () => {
       await expect(plugin.shutdown()).resolves.not.toThrow();
+    });
+
+    it("unregisters all security metadata on shutdown", async () => {
+      await plugin.init(mockCtx);
+      await plugin.shutdown();
+      expect(mockCtx.unregisterPermission).toHaveBeenCalledWith("cron.manage");
+      expect(mockCtx.unregisterInjectionSource).toHaveBeenCalledWith("cron");
+      expect(mockCtx.unregisterToolPermission).toHaveBeenCalledWith("cron_schedule");
+      expect(mockCtx.unregisterToolPermission).toHaveBeenCalledWith("cron_once");
+      expect(mockCtx.unregisterToolPermission).toHaveBeenCalledWith("cron_list");
+      expect(mockCtx.unregisterToolPermission).toHaveBeenCalledWith("cron_cancel");
+      expect(mockCtx.unregisterToolPermission).toHaveBeenCalledWith("cron_history");
     });
   });
 });

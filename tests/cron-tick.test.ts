@@ -30,6 +30,7 @@ describe("cron-tick", () => {
       log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
       inject: vi.fn(() => Promise.resolve()),
       getMainConfig: vi.fn(() => undefined),
+      getConfig: vi.fn(() => ({})),
     };
   });
 
@@ -55,7 +56,7 @@ describe("cron-tick", () => {
       const tick = createCronTickLoop(mockCtx);
       await tick();
 
-      expect(mockCtx.inject).toHaveBeenCalledWith("main", "hello", { from: "cron", silent: true });
+      expect(mockCtx.inject).toHaveBeenCalledWith("main", "hello", { from: "cron", silent: true, source: { type: "cron", trustLevel: "owner", identity: { pluginName: "wopr-plugin-cron" } } });
     });
 
     it("records a successful run in history", async () => {
@@ -85,7 +86,7 @@ describe("cron-tick", () => {
       const tick = createCronTickLoop(mockCtx);
       await tick();
 
-      expect(mockCtx.inject).toHaveBeenCalledWith("main", "one-time", { from: "cron", silent: true });
+      expect(mockCtx.inject).toHaveBeenCalledWith("main", "one-time", { from: "cron", silent: true, source: { type: "cron", trustLevel: "owner", identity: { pluginName: "wopr-plugin-cron" } } });
     });
 
     it("removes one-time jobs after execution", async () => {
