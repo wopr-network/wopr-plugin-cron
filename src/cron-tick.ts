@@ -2,13 +2,14 @@ import type { WOPRPluginContext } from "@wopr-network/plugin-types";
 import { executeCronScripts, resolveScriptTemplates, shouldRunCron } from "./cron.js";
 import { addCronRun, getCrons, removeCron } from "./cron-repository.js";
 import type { CronScriptResult } from "./cron-schema.js";
+import { PLUGIN_NAME } from "./plugin-name.js";
 
 const CRON_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max per cron job
 
 const CRON_SOURCE = {
   type: "cron" as const,
   trustLevel: "owner" as const,
-  identity: { pluginName: "wopr-plugin-cron" },
+  identity: { pluginName: PLUGIN_NAME },
 };
 
 export function createCronTickLoop(ctx: WOPRPluginContext): () => Promise<void> {

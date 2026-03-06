@@ -3,6 +3,7 @@ import { buildCronA2ATools } from "./cron-a2a-tools.js";
 import { cronCommandHandler } from "./cron-commands.js";
 import { initCronStorage, resetCronStorage } from "./cron-repository.js";
 import { createCronTickLoop } from "./cron-tick.js";
+import { PLUGIN_NAME } from "./plugin-name.js";
 
 const CRON_TOOLS = ["cron_schedule", "cron_once", "cron_list", "cron_cancel", "cron_history"] as const;
 
@@ -18,14 +19,15 @@ interface SecurityRegistrationApi {
 
 let ctx: WOPRPluginContext | null = null;
 let tickInterval: ReturnType<typeof setInterval> | null = null;
+let tickInFlight: Promise<void> | null = null;
 
 const plugin: WOPRPlugin = {
-  name: "wopr-plugin-cron",
+  name: PLUGIN_NAME,
   version: "1.0.0",
   description: "Cron scheduling — recurring and one-time message injection with optional script execution",
 
   manifest: {
-    name: "wopr-plugin-cron",
+    name: PLUGIN_NAME,
     version: "1.0.0",
     description: "Cron scheduling — recurring and one-time message injection with optional script execution",
     capabilities: ["scheduling", "automation"],
@@ -63,7 +65,10 @@ const plugin: WOPRPlugin = {
   async init(context: WOPRPluginContext) {
     ctx = context;
 
-    // 1. Register security metadata
+    // 1. Register storage schema and get repositories
+    await initCronStorage(ctx.storage);
+
+    // 2. Register security metadata (after storage init succeeds)
     const c = ctx as WOPRPluginContext & SecurityRegistrationApi;
     c.registerPermission?.("cron.manage");
     c.registerInjectionSource?.("cron", "owner");
@@ -71,13 +76,15 @@ const plugin: WOPRPlugin = {
       c.registerToolPermission?.(tool, "cron.manage");
     }
 
-    // 2. Register storage schema and get repositories
-    await initCronStorage(ctx.storage);
-
-    // 2. Start tick loop (30s interval)
+    // 3. Start tick loop (30s interval)
     const cronTick = createCronTickLoop(ctx);
-    tickInterval = setInterval(cronTick, 30000);
-    cronTick(); // Run immediately on startup
+    const wrappedTick = () => {
+      tickInFlight = cronTick().finally(() => {
+        tickInFlight = null;
+      });
+    };
+    tickInterval = setInterval(wrappedTick, 30000);
+    wrappedTick(); // Run immediately on startup
 
     // 3. Register A2A tools
     if (ctx.registerA2AServer) {
@@ -92,13 +99,17 @@ const plugin: WOPRPlugin = {
       clearInterval(tickInterval);
       tickInterval = null;
     }
+    if (tickInFlight) {
+      await tickInFlight;
+    }
     if (ctx) {
       const c = ctx as WOPRPluginContext & SecurityRegistrationApi;
-      c.unregisterPermission?.("cron.manage");
-      c.unregisterInjectionSource?.("cron");
+      // Unregister tool-permission mappings before removing the permission they reference
       for (const tool of CRON_TOOLS) {
         c.unregisterToolPermission?.(tool);
       }
+      c.unregisterPermission?.("cron.manage");
+      c.unregisterInjectionSource?.("cron");
     }
     resetCronStorage();
     ctx = null;
