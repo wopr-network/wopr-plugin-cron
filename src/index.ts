@@ -1,8 +1,20 @@
-import type { WOPRPlugin, WOPRPluginContext } from "@wopr-network/plugin-types";
+import type { ConfigSchema, WOPRPlugin, WOPRPluginContext } from "@wopr-network/plugin-types";
 import { buildCronA2ATools } from "./cron-a2a-tools.js";
 import { cronCommandHandler } from "./cron-commands.js";
 import { initCronStorage, resetCronStorage } from "./cron-repository.js";
 import { createCronTickLoop } from "./cron-tick.js";
+
+const CRON_TOOLS = ["cron_schedule", "cron_once", "cron_list", "cron_cancel", "cron_history"] as const;
+
+/** Security registration methods added by WOP-1770; not yet in published plugin-types. */
+interface SecurityRegistrationApi {
+  registerPermission?(name: string): void;
+  registerInjectionSource?(name: string, trustLevel: string): void;
+  registerToolPermission?(toolName: string, permission: string): void;
+  unregisterPermission?(name: string): void;
+  unregisterInjectionSource?(name: string): void;
+  unregisterToolPermission?(toolName: string): void;
+}
 
 let ctx: WOPRPluginContext | null = null;
 let tickInterval: ReturnType<typeof setInterval> | null = null;
@@ -22,6 +34,21 @@ const plugin: WOPRPlugin = {
     icon: ":clock3:",
     lifecycle: { shutdownBehavior: "graceful" },
     requires: {},
+    configSchema: {
+      title: "Cron Plugin",
+      description: "Settings for the cron scheduling plugin",
+      fields: [
+        {
+          name: "cronScriptsEnabled",
+          type: "checkbox",
+          label: "Enable Cron Scripts",
+          description:
+            "Allow cron jobs to execute shell scripts before sending messages. Scripts run with the daemon's permissions.",
+          default: false,
+          required: false,
+        },
+      ],
+    } satisfies ConfigSchema,
   },
 
   commands: [
@@ -36,7 +63,15 @@ const plugin: WOPRPlugin = {
   async init(context: WOPRPluginContext) {
     ctx = context;
 
-    // 1. Register storage schema and get repositories
+    // 1. Register security metadata
+    const c = ctx as WOPRPluginContext & SecurityRegistrationApi;
+    c.registerPermission?.("cron.manage");
+    c.registerInjectionSource?.("cron", "owner");
+    for (const tool of CRON_TOOLS) {
+      c.registerToolPermission?.(tool, "cron.manage");
+    }
+
+    // 2. Register storage schema and get repositories
     await initCronStorage(ctx.storage);
 
     // 2. Start tick loop (30s interval)
@@ -56,6 +91,14 @@ const plugin: WOPRPlugin = {
     if (tickInterval) {
       clearInterval(tickInterval);
       tickInterval = null;
+    }
+    if (ctx) {
+      const c = ctx as WOPRPluginContext & SecurityRegistrationApi;
+      c.unregisterPermission?.("cron.manage");
+      c.unregisterInjectionSource?.("cron");
+      for (const tool of CRON_TOOLS) {
+        c.unregisterToolPermission?.(tool);
+      }
     }
     resetCronStorage();
     ctx = null;
